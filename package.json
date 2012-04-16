@@ -1,0 +1,28 @@
+{
+  "name": "critbit",
+  "version": "0.0.1",
+  "description": "Blazingly fast critbit trees for JavaScript.",
+  "keywords": [
+    "critbit",
+    "crit bit",
+    "hash table",
+    "tree"
+  ],
+  "homepage": "https://github.com/jasondavies/critbit.js",
+  "author": {
+    "name": "Jason Davies",
+    "url": "http://www.jasondavies.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/jasondavies/critbit.js.git"
+  },
+  "main": "critbit.js",
+  "devDependencies": {
+    "vows": "0.6.x",
+    "uglify-js": "1.2.x"
+  },
+  "scripts": {
+    "test": "./node_modules/vows/bin/vows"
+  }
+}
