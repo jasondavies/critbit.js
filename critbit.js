@@ -10,9 +10,10 @@ function Tree() {
   // 1: right pointer
   // 2: "byte"
   // 3: otherbits
-  this.nodes = alloc();
+  this.nodes = [];
   this.next = 0;
   this.keys = [];
+  this.free = [];
 }
 
 Tree.prototype.contains = function(u) {
@@ -71,7 +72,7 @@ Tree.prototype.insert = function(u) {
   newotherbits |= newotherbits >> 1;
   newotherbits |= newotherbits >> 2;
   newotherbits |= newotherbits >> 4;
-  newotherbits = (~newotherbits | (newotherbits >> 1)) & 255
+  newotherbits = (~newotherbits | (newotherbits >> 1)) & 255;
   c = newbyte < klen ? k.charCodeAt(newbyte) : 0;
   var newdirection = 1 + (newotherbits | c) >> 8;
 
@@ -119,8 +120,9 @@ Tree.prototype.remove = function(u) {
   }
   if (keys[p >> 1] !== u) return;
   if (whereq < 0) {
-    keys.length = 0;
+    nodes.length = 0;
     this.next = 0;
+    keys.length = 0;
     return u;
   }
   nodes[whereq] = nodes[q + 1 - direction];
@@ -151,9 +153,16 @@ Tree.prototype.prefixed = function(prefix, f) {
   }
 };
 
-function alloc() {
-  return new Int32Array(4 * 1e6);
-}
+Tree.prototype.union = function(tree) {
+  if (!this.next) return tree;
+  if (!tree.size()) return this;
+
+};
+
+Tree.prototype.intersection = function(tree) {
+  if (!this.next) return this.next;
+  if (!tree.size()) return tree;
+};
 
 exports.Tree = Tree;
 

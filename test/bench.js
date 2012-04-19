@@ -2,8 +2,21 @@ var Tree = require("../critbit").Tree;
 
 var obj = {},
     max = 1e6,
-    len = 20,
+    len = 50,
+    keys = [],
     start;
+
+for (var i = 0; i < max; i++) {
+  keys[i] = key(i);
+}
+keys.sort();
+
+start = +new Date;
+var result = 1;
+for (var i = 0; i < max; i++) {
+  result &= bisect(keys, key(i));
+}
+console.log("bisect.contains", +new Date - start, result);
 
 start = +new Date;
 for (var i = 0; i < max; i++) {
@@ -56,9 +69,32 @@ for (var i = 0; i < max; i++) {
 console.log("obj.remove", +new Date - start, result);
 
 function key(d) {
-  d = d.toString(16);
+  d = "http://" + d.toString(16);
   while (d.length < len) {
     d += d.substr(0, len - d.length);
   }
   return d;
+}
+
+function bisect(a, x) {
+  var i = bisectLeft(a, x, 0, a.length);
+  return a[i] === x;
+}
+
+function bisectRight(a, x, lo, hi) {
+  while (lo < hi) {
+    var mid = lo + hi >> 1;
+    if (x < a[mid]) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+function bisectLeft(a, x, lo, hi) {
+  while (lo < hi) {
+    var mid = lo + hi >> 1;
+    if (a[mid] < x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }

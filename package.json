@@ -1,6 +1,6 @@
 {
   "name": "critbit",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Blazingly fast critbit trees for JavaScript.",
   "keywords": [
     "critbit",
