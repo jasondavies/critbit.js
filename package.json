@@ -1,6 +1,6 @@
 {
   "name": "critbit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Crit-bit trees for JavaScript: sorted sets and maps of strings with fast prefix queries.",
   "license": "BSD-3-Clause",
   "keywords": [
