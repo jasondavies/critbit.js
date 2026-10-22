@@ -383,6 +383,11 @@ test("non-string keys", () => {
   assert.throws(() => new TreeMap(["ab"]), TypeError);
   assert.throws(() => new TreeMap([1]), TypeError);
   assert.throws(() => tree.union(new Set(["b"])), TypeError);
+  for (const f of [undefined, null, 1, "f"]) {
+    assert.throws(() => new Tree().forEach(f), TypeError);
+    assert.throws(() => new TreeMap().forEach(f), TypeError);
+    assert.throws(() => new Tree().prefixed("", f), TypeError);
+  }
   assert.throws(() => tree.intersection(null), TypeError);
 });
 
@@ -528,8 +533,14 @@ test("growth keeps keys, values and iterators", () => {
     map.set("a" + i, i);
     reference.set("a" + i, i);
   }
-  const it = map.keys();
-  for (let i = 0; i < 10; i++) seen.push(it.next().value);
+  const it = map.keys(),
+      values = map.values(),
+      entries = map.entries();
+  for (let i = 0; i < 10; i++) {
+    seen.push(it.next().value);
+    assert.equal(values.next().value, reference.get(seen[i]));
+    assert.deepEqual(entries.next().value, [seen[i], reference.get(seen[i])]);
+  }
   // Grow the tree, deleting some keys and reusing their slots.
   for (let i = 0; i < 20000; i++) {
     map.set("b" + i, i);
@@ -541,9 +552,33 @@ test("growth keeps keys, values and iterators", () => {
   }
   checkTree(map, reference, true);
   for (let x = it.next(); !x.done; x = it.next()) seen.push(x.value);
-  // The iterator carries on after the tenth key, visiting the keys after it.
-  const tenth = seen[9];
-  assert.deepEqual(seen.slice(10), [...reference.keys()].sort().filter(k => k > tenth));
+  // The iterators carry on after the tenth key, visiting the keys after it.
+  const tenth = seen[9],
+      rest = [...reference.keys()].sort().filter(k => k > tenth);
+  assert.deepEqual(seen.slice(10), rest);
+  assert.deepEqual([...values], rest.map(k => reference.get(k)));
+  assert.deepEqual([...entries], rest.map(k => [k, reference.get(k)]));
+});
+
+test("iterating deep trees, changing them partway", () => {
+  // Each key is a prefix of the next, plus "b", so the tree is a chain.
+  const all = Array.from({length: 300}, (_, i) => "a".repeat(i) + "b"),
+      tree = new Tree(all),
+      sorted = all.slice().sort(),
+      seen = [];
+  for (const k of tree.keys(sorted[1])) {
+    seen.push(k);
+    if (seen.length === 100) tree.delete(sorted[150]);
+  }
+  assert.deepEqual(seen, sorted.slice(1).filter(k => k !== sorted[150]));
+  // A key added after the current one, here at the end, is visited.
+  const found = [];
+  tree.forEach(k => {
+    found.push(k);
+    if (found.length === 50) tree.add("c");
+  });
+  assert.equal(found[found.length - 1], "c");
+  assert.deepEqual(found, [...tree]);
 });
 
 // Randomly changes trees and maps, checking them against Map and their

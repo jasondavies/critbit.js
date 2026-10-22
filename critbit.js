@@ -89,7 +89,7 @@ class CritBitTree {
   // Calls f(key, value) for each key starting with prefix, in order, stopping
   // early if f returns false.
   prefixed(prefix, f) {
-    visit(this, checkKey(prefix), f, 0);
+    visit(this, checkKey(prefix), checkFunction(f), 0);
   }
 
   // Returns an iterator over keys in order, starting from the smallest key
@@ -151,7 +151,7 @@ export class Tree extends CritBitTree {
   // Calls f.call(thisArg, key, key, tree) for each key in order, like
   // Set.prototype.forEach.
   forEach(f, thisArg) {
-    visit(this, "", f, 1, thisArg);
+    visit(this, "", checkFunction(f), 1, thisArg);
   }
 
   // The same as keys, like Set.prototype.values.
@@ -209,7 +209,7 @@ export class TreeMap extends CritBitTree {
   // Calls f.call(thisArg, value, key, map) for each key in order, like
   // Map.prototype.forEach.
   forEach(f, thisArg) {
-    visit(this, "", f, 2, thisArg);
+    visit(this, "", checkFunction(f), 2, thisArg);
   }
 
   // Returns an iterator over values in key order, starting from the smallest
@@ -253,8 +253,9 @@ class TreeIterator extends Iterator {
     this._nodes = tree._nodes;
     this._keys = tree._keys;
     this._values = tree._values;
-    this._stack = new Int32Array(Math.max(64, stack.length << 1));
-    this._stack.set(stack);
+    // The stack is a plain array used with a stack pointer, so _step needn't
+    // shrink it; writing at the end grows it.
+    this._stack = stack;
     this._sp = stack.length;
   }
 
@@ -269,15 +270,10 @@ class TreeIterator extends Iterator {
       this._done = true;
       return -1;
     }
-    const nodes = this._nodes;
-    let stack = this._stack,
-        p = stack[--sp];
+    const nodes = this._nodes,
+        stack = this._stack;
+    let p = stack[--sp];
     while (p > 0) {
-      if (sp === stack.length) {
-        const grown = new Int32Array(sp << 1);
-        grown.set(stack);
-        this._stack = stack = grown;
-      }
       stack[sp++] = nodes[p + 1];
       p = nodes[p];
     }
@@ -320,6 +316,11 @@ class KeyPairIterator extends TreeIterator {
 function checkKey(key) {
   if (typeof key !== "string") throw new TypeError("critbit: keys must be strings");
   return key;
+}
+
+function checkFunction(f) {
+  if (typeof f !== "function") throw new TypeError("critbit: expected a function");
+  return f;
 }
 
 function checkTree(tree) {
