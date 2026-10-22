@@ -9,11 +9,9 @@ const initialSize = 1023;
 // touch fewer cache lines.
 const blockDepth = 4;
 
-// A set of strings, kept in sorted order.
-export class Tree {
-  // Creates a tree containing the given keys, if any. Keys in ascending order
-  // are added in a single fast pass.
-  constructor(keys) {
+// The parts of a crit-bit tree shared by Tree and TreeMap.
+class CritBitTree {
+  constructor() {
     // Word 0 is the root pointer. An internal node is three 32-bit words at
     // offset p > 0:
     // 0: left pointer
@@ -40,29 +38,15 @@ export class Tree {
     // Incremented whenever keys are added or removed or nodes are rearranged,
     // so that iterators can find their place again.
     this._version = 0;
-    if (keys != null) {
-      keys = Array.isArray(keys) ? keys : [...keys];
-      for (let i = build(this, keys); i < keys.length; i++) addKey(this, keys[i]);
-    }
   }
 
   get size() {
     return this._size;
   }
 
-  get [Symbol.toStringTag]() {
-    return "Tree";
-  }
-
   // Returns whether key is in the tree. Returns false if key isn't a string.
   has(key) {
     return findKey(this, key) >= 0;
-  }
-
-  // Adds key, returning this tree.
-  add(key) {
-    addKey(this, key);
-    return this;
   }
 
   // Removes key, returning whether it was present.
@@ -108,33 +92,10 @@ export class Tree {
     visit(this, checkKey(prefix), f, true);
   }
 
-  // Calls f.call(thisArg, key, key, tree) for each key in order, like
-  // Set.prototype.forEach.
-  forEach(f, thisArg) {
-    visit(this, "", key => {
-      f.call(thisArg, key, key, this);
-    }, false);
-  }
-
   // Returns an iterator over keys in order, starting from the smallest key
   // greater than or equal to start if given.
   keys(start) {
     return new TreeIterator(this, start, 0);
-  }
-
-  // The same as keys, like Set.prototype.values.
-  values(start) {
-    return new TreeIterator(this, start, 0);
-  }
-
-  // Returns an iterator over [key, key] pairs in key order, like
-  // Set.prototype.entries.
-  entries(start) {
-    return new TreeIterator(this, start, 3);
-  }
-
-  [Symbol.iterator]() {
-    return this.keys();
   }
 
   // Returns a new tree containing the keys in this tree or the given tree.
@@ -165,8 +126,54 @@ export class Tree {
   }
 }
 
+// A set of strings, kept in sorted order.
+export class Tree extends CritBitTree {
+  // Creates a tree containing the given keys, if any. Keys in ascending order
+  // are added in a single fast pass.
+  constructor(keys) {
+    super();
+    if (keys != null) {
+      keys = Array.isArray(keys) ? keys : [...keys];
+      for (let i = build(this, keys); i < keys.length; i++) addKey(this, keys[i]);
+    }
+  }
+
+  get [Symbol.toStringTag]() {
+    return "Tree";
+  }
+
+  // Adds key, returning this tree.
+  add(key) {
+    addKey(this, key);
+    return this;
+  }
+
+  // Calls f.call(thisArg, key, key, tree) for each key in order, like
+  // Set.prototype.forEach.
+  forEach(f, thisArg) {
+    visit(this, "", key => {
+      f.call(thisArg, key, key, this);
+    }, false);
+  }
+
+  // The same as keys, like Set.prototype.values.
+  values(start) {
+    return new TreeIterator(this, start, 0);
+  }
+
+  // Returns an iterator over [key, key] pairs in key order, like
+  // Set.prototype.entries.
+  entries(start) {
+    return new TreeIterator(this, start, 3);
+  }
+
+  [Symbol.iterator]() {
+    return this.keys();
+  }
+}
+
 // A map from strings to values, kept in sorted order by key.
-export class TreeMap extends Tree {
+export class TreeMap extends CritBitTree {
   // Creates a map containing the given [key, value] entries, if any. Entries
   // in ascending key order are added in a single fast pass.
   constructor(entries) {
@@ -278,7 +285,7 @@ function checkKey(key) {
 }
 
 function checkTree(tree) {
-  if (!(tree instanceof Tree)) throw new TypeError("critbit: expected a Tree or TreeMap");
+  if (!(tree instanceof CritBitTree)) throw new TypeError("critbit: expected a Tree or TreeMap");
   return tree;
 }
 

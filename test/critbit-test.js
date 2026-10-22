@@ -502,6 +502,16 @@ test("prefixed with prefixes that match nothing", () => {
   assert.deepEqual(found, []);
 });
 
+test("TreeMap has no add, like Map", () => {
+  const map = new TreeMap([["a", 1]]);
+  assert.equal(map.add, undefined);
+  assert.equal("add" in map, false);
+  assert.throws(() => map.add("b"), TypeError);
+  assert.deepEqual([...map], [["a", 1]]);
+  assert.equal(map instanceof Tree, false);
+  assert.equal(new Tree() instanceof TreeMap, false);
+});
+
 test("TreeMap.union with a Tree", () => {
   const map = new TreeMap([["a", 1], ["c", 3]]),
       union = map.union(new Tree(["b", "c"]));
