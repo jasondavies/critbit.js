@@ -1,28 +1,46 @@
 {
   "name": "critbit",
-  "version": "0.0.2",
-  "description": "Blazingly fast critbit trees for JavaScript.",
+  "version": "1.0.0",
+  "description": "Crit-bit trees for JavaScript: sorted sets and maps of strings with fast prefix queries.",
+  "license": "BSD-3-Clause",
   "keywords": [
     "critbit",
-    "crit bit",
-    "hash table",
-    "tree"
+    "crit-bit tree",
+    "patricia trie",
+    "radix tree",
+    "trie",
+    "sorted set",
+    "sorted map",
+    "prefix search"
   ],
   "homepage": "https://github.com/jasondavies/critbit.js",
   "author": {
     "name": "Jason Davies",
-    "url": "http://www.jasondavies.com/"
+    "url": "https://www.jasondavies.com/"
   },
   "repository": {
     "type": "git",
-    "url": "http://github.com/jasondavies/critbit.js.git"
+    "url": "git+https://github.com/jasondavies/critbit.js.git"
   },
+  "type": "module",
   "main": "critbit.js",
-  "devDependencies": {
-    "vows": "0.6.x",
-    "uglify-js": "1.2.x"
+  "types": "critbit.d.ts",
+  "exports": {
+    ".": {
+      "types": "./critbit.d.ts",
+      "default": "./critbit.js"
+    }
   },
+  "sideEffects": false,
+  "files": [
+    "critbit.js",
+    "critbit.d.ts"
+  ],
   "scripts": {
-    "test": "./node_modules/vows/bin/vows"
+    "test": "node --test test/critbit-test.js",
+    "bench": "node --expose-gc test/bench.js"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
