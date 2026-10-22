@@ -92,13 +92,13 @@ export class Tree {
 
   // Returns the smallest key greater than key, or undefined if there is none.
   successor(key) {
-    const p = neighbor(this, checkKey(key), false);
+    const p = neighbor(this, checkKey(key), 0);
     return p ? this._keys[~edge(this._nodes, p, 0)] : undefined;
   }
 
   // Returns the largest key less than key, or undefined if there is none.
   predecessor(key) {
-    const p = neighbor(this, checkKey(key), true);
+    const p = neighbor(this, checkKey(key), 1);
     return p ? this._keys[~edge(this._nodes, p, 1)] : undefined;
   }
 
@@ -246,8 +246,8 @@ class TreeIterator extends Iterator {
     this._nodes = tree._nodes;
     this._keys = tree._keys;
     this._values = tree._values;
-    this._stack = this._last !== undefined ? cursor(tree, this._last, false, false)
-        : this._start !== undefined ? cursor(tree, this._start, true, false)
+    this._stack = this._last !== undefined ? cursor(tree, this._last, false)
+        : this._start !== undefined ? cursor(tree, this._start, true)
         : tree._next ? [tree._nodes[0]] : [];
   }
 
@@ -296,8 +296,31 @@ function findKey(tree, u) {
   return u === tree._keys[~p] ? ~p : -1;
 }
 
-// Slots on the path from the root to the closest key, recorded by addKey.
+// Slots on the path from the root to a key, recorded by walk: path[0] is 0,
+// the root slot, and path[j] is the slot taken at the (j - 1)th node.
 let path = new Int32Array(64);
+
+// Walks from the root to the key whose bits best match u, recording the path.
+// Returns the number of slots recorded; the last points to the key reached.
+function walk(nodes, u) {
+  const ulen = u.length;
+  let slot = 0,
+      p = nodes[0],
+      depth = 0;
+  for (;;) {
+    if (depth === path.length) {
+      const grown = new Int32Array(depth << 1);
+      grown.set(path);
+      path = grown;
+    }
+    path[depth++] = slot;
+    if (p < 0) return depth;
+    const c = nodes[p + 2],
+        i = c >>> 5;
+    slot = p + (i < ulen ? (u.charCodeAt(i) | 0x10000) >>> (c & 31) & 1 : 0);
+    p = nodes[slot];
+  }
+}
 
 // Adds u, returning its new key index, or ~(its key index) if it was already
 // present.
@@ -319,22 +342,9 @@ function addKey(tree, u) {
     relayout(tree, nodes.length << 1 | 1, false);
     nodes = tree._nodes;
   }
-  let slot = 0,
-      p = nodes[0],
-      depth = 0;
-  for (;;) {
-    if (depth === path.length) {
-      const grown = new Int32Array(depth << 1);
-      grown.set(path);
-      path = grown;
-    }
-    path[depth++] = slot;
-    if (p < 0) break;
-    const c = nodes[p + 2],
-        i = c >>> 5;
-    slot = p + (i < ulen ? (u.charCodeAt(i) | 0x10000) >>> (c & 31) & 1 : 0);
-    p = nodes[slot];
-  }
+  // walk may replace path, so call it before reading path.
+  const depth = walk(nodes, u);
+  let p = nodes[path[depth - 1]];
   const k = keys[~p],
       newcrit = critBit(k, u);
   if (newcrit < 0) return p;
@@ -484,32 +494,26 @@ function bit(u, c) {
   return i < u.length ? (u.charCodeAt(i) | 0x10000) >>> (c & 31) & 1 : 0;
 }
 
-// Returns the subtree whose smallest key (or largest if reverse) is the
+// Returns the subtree whose smallest key (or largest if reverse is 1) is the
 // smallest key greater than u (or the largest key less than u), or 0 if there
 // is none. This is the top of the stack that cursor would return.
 function neighbor(tree, u, reverse) {
   if (!tree._next) return 0;
   const nodes = tree._nodes,
-      ulen = u.length;
-  let p = nodes[0];
-  while (p > 0) {
-    const c = nodes[p + 2],
-        i = c >>> 5;
-    p = nodes[p + (i < ulen ? (u.charCodeAt(i) | 0x10000) >>> (c & 31) & 1 : 0)];
-  }
-  let crit = critBit(tree._keys[~p], u),
+      depth = walk(nodes, u);
+  let crit = critBit(tree._keys[~nodes[path[depth - 1]]], u),
       wanted = false;
   if (crit < 0) crit = 0x7fffffff;
-  else wanted = bit(u, crit) === +reverse;
-  const away = +reverse;
-  let result = 0;
-  p = nodes[0];
-  while (p > 0) {
-    const c = nodes[p + 2];
-    if ((c ^ 31) > (crit ^ 31)) break;
-    const dir = bit(u, c);
-    if (dir === away) result = nodes[p + 1 - dir];
-    p = nodes[p + dir];
+  else wanted = bit(u, crit) === reverse;
+  // Replay the path down to the first node with a later crit, remembering the
+  // last subtree passed on the side away from reverse.
+  const order = crit ^ 31;
+  let result = 0,
+      p = nodes[0];
+  for (let j = 1; j < depth && (nodes[p + 2] ^ 31) < order; j++) {
+    const dir = path[j] - p;
+    if (dir === reverse) result = nodes[p + 1 - dir];
+    p = nodes[path[j]];
   }
   return wanted ? p : result;
 }
@@ -523,41 +527,25 @@ function edge(nodes, p, dir) {
 
 // Returns a stack of subtrees whose keys, taken from the top of the stack
 // down, are in order and are the keys greater than u, or greater than or
-// equal to u if inclusive. If reverse, the order is descending and the keys
-// are less than u, or less than or equal to u if inclusive.
-function cursor(tree, u, inclusive, reverse) {
+// equal to u if inclusive.
+function cursor(tree, u, inclusive) {
   const stack = [];
   if (!tree._next) return stack;
   const nodes = tree._nodes,
-      ulen = u.length;
-  let p = nodes[0];
-  while (p > 0) {
-    const c = nodes[p + 2],
-        i = c >>> 5;
-    p = nodes[p + (i < ulen ? (u.charCodeAt(i) | 0x10000) >>> (c & 31) & 1 : 0)];
-  }
+      depth = walk(nodes, u);
   // Find the subtree whose keys share a prefix with u up to the first bit
   // where u differs from them, and whether its keys are wanted: u's bit there
-  // is 1 if u sorts after them.
-  let crit = critBit(tree._keys[~p], u),
-      wanted;
-  if (crit < 0) {
-    crit = 0x7fffffff;
-    wanted = inclusive;
-  } else {
-    wanted = bit(u, crit) === +reverse;
-  }
-  // Going left (or right if reverse) from a node leaves the other subtree's
-  // keys still to come.
-  const away = +reverse;
-  p = nodes[0];
-  while (p > 0) {
-    const c = nodes[p + 2];
-    if ((c ^ 31) > (crit ^ 31)) break;
-    const i = c >>> 5,
-        dir = i < ulen ? (u.charCodeAt(i) | 0x10000) >>> (c & 31) & 1 : 0;
-    if (dir === away) stack.push(nodes[p + 1 - dir]);
-    p = nodes[p + dir];
+  // is 0 if u sorts before them.
+  let crit = critBit(tree._keys[~nodes[path[depth - 1]]], u),
+      wanted = inclusive;
+  if (crit < 0) crit = 0x7fffffff;
+  else wanted = !bit(u, crit);
+  // Going left from a node leaves its right subtree's keys still to come.
+  const order = crit ^ 31;
+  let p = nodes[0];
+  for (let j = 1; j < depth && (nodes[p + 2] ^ 31) < order; j++) {
+    if (path[j] === p) stack.push(nodes[p + 1]);
+    p = nodes[path[j]];
   }
   if (wanted) stack.push(p);
   return stack;
@@ -600,7 +588,7 @@ function visit(tree, prefix, f, stoppable) {
       nodes = tree._nodes;
       keys = tree._keys;
       values = tree._values;
-      stack = cursor(tree, key, false, false);
+      stack = cursor(tree, key, false);
       moved = true;
     }
   }
