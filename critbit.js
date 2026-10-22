@@ -89,13 +89,13 @@ class CritBitTree {
   // Calls f(key, value) for each key starting with prefix, in order, stopping
   // early if f returns false.
   prefixed(prefix, f) {
-    visit(this, checkKey(prefix), f, true);
+    visit(this, checkKey(prefix), f, 0);
   }
 
   // Returns an iterator over keys in order, starting from the smallest key
   // greater than or equal to start if given.
   keys(start) {
-    return new TreeIterator(this, start, 0);
+    return new KeyIterator(this, start);
   }
 
   // Returns a new tree containing the keys in this tree or the given tree.
@@ -151,20 +151,18 @@ export class Tree extends CritBitTree {
   // Calls f.call(thisArg, key, key, tree) for each key in order, like
   // Set.prototype.forEach.
   forEach(f, thisArg) {
-    visit(this, "", key => {
-      f.call(thisArg, key, key, this);
-    }, false);
+    visit(this, "", f, 1, thisArg);
   }
 
   // The same as keys, like Set.prototype.values.
   values(start) {
-    return new TreeIterator(this, start, 0);
+    return new KeyIterator(this, start);
   }
 
   // Returns an iterator over [key, key] pairs in key order, like
   // Set.prototype.entries.
   entries(start) {
-    return new TreeIterator(this, start, 3);
+    return new KeyPairIterator(this, start);
   }
 
   [Symbol.iterator]() {
@@ -211,21 +209,19 @@ export class TreeMap extends CritBitTree {
   // Calls f.call(thisArg, value, key, map) for each key in order, like
   // Map.prototype.forEach.
   forEach(f, thisArg) {
-    visit(this, "", (key, value) => {
-      f.call(thisArg, value, key, this);
-    }, false);
+    visit(this, "", f, 2, thisArg);
   }
 
   // Returns an iterator over values in key order, starting from the smallest
   // key greater than or equal to start if given.
   values(start) {
-    return new TreeIterator(this, start, 1);
+    return new ValueIterator(this, start);
   }
 
   // Returns an iterator over [key, value] pairs in key order, starting from
   // the smallest key greater than or equal to start if given.
   entries(start) {
-    return new TreeIterator(this, start, 2);
+    return new EntryIterator(this, start);
   }
 
   [Symbol.iterator]() {
@@ -233,49 +229,91 @@ export class TreeMap extends CritBitTree {
   }
 }
 
-// Iterates over keys (kind 0), values (1), [key, value] pairs (2) or [key,
-// key] pairs (3) in key order. If the tree changes, it carries on from the key
-// after the last one returned, so like Set and Map iterators it skips deleted
-// keys and visits added keys that sort later.
+// Iterates in key order, starting from the smallest key greater than or equal
+// to start if given. If the tree changes, it carries on from the key after the
+// last one returned, so like Set and Map iterators it skips deleted keys and
+// visits added keys that sort later. Subclasses choose what to return for
+// each key.
 class TreeIterator extends Iterator {
-  constructor(tree, start, kind) {
+  constructor(tree, start) {
     super();
     this._tree = tree;
     this._start = start === undefined ? start : checkKey(start);
-    this._kind = kind;
     this._last = undefined;
+    this._done = false;
     this._seek();
   }
 
   _seek() {
-    const tree = this._tree;
+    const tree = this._tree,
+        stack = this._last !== undefined ? cursor(tree, this._last, false)
+            : this._start !== undefined ? cursor(tree, this._start, true)
+            : tree._next ? [tree._nodes[0]] : [];
     this._version = tree._version;
     this._nodes = tree._nodes;
     this._keys = tree._keys;
     this._values = tree._values;
-    this._stack = this._last !== undefined ? cursor(tree, this._last, false)
-        : this._start !== undefined ? cursor(tree, this._start, true)
-        : tree._next ? [tree._nodes[0]] : [];
+    this._stack = new Int32Array(Math.max(64, stack.length << 1));
+    this._stack.set(stack);
+    this._sp = stack.length;
   }
 
-  next() {
-    if (!this._stack) return {value: undefined, done: true};
-    if (this._version !== this._tree._version) this._seek();
-    const stack = this._stack,
-        nodes = this._nodes;
-    if (!stack.length) {
-      this._stack = null;
-      return {value: undefined, done: true};
+  // Returns the index of the next key, or -1 if there are no more.
+  _step() {
+    if (this._version !== this._tree._version) {
+      if (this._done) return -1;
+      this._seek();
     }
-    let p = stack.pop();
+    let sp = this._sp;
+    if (sp === 0) {
+      this._done = true;
+      return -1;
+    }
+    const nodes = this._nodes;
+    let stack = this._stack,
+        p = stack[--sp];
     while (p > 0) {
-      stack.push(nodes[p + 1]);
+      if (sp === stack.length) {
+        const grown = new Int32Array(sp << 1);
+        grown.set(stack);
+        this._stack = stack = grown;
+      }
+      stack[sp++] = nodes[p + 1];
       p = nodes[p];
     }
-    const x = ~p,
-        key = this._last = this._keys[x],
-        kind = this._kind;
-    return {value: kind === 0 ? key : kind === 1 ? this._values[x] : kind === 2 ? [key, this._values[x]] : [key, key], done: false};
+    this._sp = sp;
+    this._last = this._keys[~p];
+    return ~p;
+  }
+}
+
+class KeyIterator extends TreeIterator {
+  next() {
+    const x = this._step();
+    return x < 0 ? {value: undefined, done: true} : {value: this._keys[x], done: false};
+  }
+}
+
+class ValueIterator extends TreeIterator {
+  next() {
+    const x = this._step();
+    return x < 0 ? {value: undefined, done: true} : {value: this._values[x], done: false};
+  }
+}
+
+class EntryIterator extends TreeIterator {
+  next() {
+    const x = this._step();
+    return x < 0 ? {value: undefined, done: true} : {value: [this._keys[x], this._values[x]], done: false};
+  }
+}
+
+class KeyPairIterator extends TreeIterator {
+  next() {
+    const x = this._step();
+    if (x < 0) return {value: undefined, done: true};
+    const key = this._keys[x];
+    return {value: [key, key], done: false};
   }
 }
 
@@ -558,10 +596,12 @@ function cursor(tree, u, inclusive) {
   return stack;
 }
 
-// Calls f(key, value) for each key starting with prefix, in order. If stoppable,
-// stops when f returns false. If f changes the tree, carries on from the key
-// after the one just visited.
-function visit(tree, prefix, f, stoppable) {
+// Calls f for each key starting with prefix, in order: f(key, value) for
+// prefixed (mode 0), stopping if f returns false; f(key, key, tree) like
+// Set.prototype.forEach (mode 1); or f(value, key, tree) like
+// Map.prototype.forEach (mode 2), with thisArg. If f changes the tree, carries
+// on from the key after the one just visited.
+function visit(tree, prefix, f, mode, thisArg) {
   if (!tree._next) return;
   const ulen = prefix.length;
   let nodes = tree._nodes,
@@ -589,7 +629,13 @@ function visit(tree, prefix, f, stoppable) {
     // After the tree changes, the stack covers all later keys, not only those
     // starting with prefix.
     if (moved && !key.startsWith(prefix)) return;
-    if (f(key, values && values[~p]) === false && stoppable) return;
+    if (mode === 0) {
+      if (f(key, values && values[~p]) === false) return;
+    } else {
+      const value = mode === 1 ? key : values[~p];
+      if (thisArg === undefined) f(value, key, tree);
+      else f.call(thisArg, value, key, tree);
+    }
     if (tree._version !== version) {
       version = tree._version;
       nodes = tree._nodes;
