@@ -520,6 +520,32 @@ test("TreeMap.union with a Tree", () => {
   assert.deepEqual([...map.intersection(new Tree(["c", "d"]))], [["c", 3]]);
 });
 
+test("growth keeps keys, values and iterators", () => {
+  const map = new TreeMap(),
+      reference = new Map(),
+      seen = [];
+  for (let i = 0; i < 20000; i++) {
+    map.set("a" + i, i);
+    reference.set("a" + i, i);
+  }
+  const it = map.keys();
+  for (let i = 0; i < 10; i++) seen.push(it.next().value);
+  // Grow the tree, deleting some keys and reusing their slots.
+  for (let i = 0; i < 20000; i++) {
+    map.set("b" + i, i);
+    reference.set("b" + i, i);
+    if (i % 3 === 0) {
+      map.delete("a" + i);
+      reference.delete("a" + i);
+    }
+  }
+  checkTree(map, reference, true);
+  for (let x = it.next(); !x.done; x = it.next()) seen.push(x.value);
+  // The iterator carries on after the tenth key, visiting the keys after it.
+  const tenth = seen[9];
+  assert.deepEqual(seen.slice(10), [...reference.keys()].sort().filter(k => k > tenth));
+});
+
 // Randomly changes trees and maps, checking them against Map and their
 // internal structure after each step.
 test("random operations keep the tree consistent", () => {

@@ -371,8 +371,7 @@ function walk(nodes, u) {
 // present.
 function addKey(tree, u) {
   checkKey(u);
-  const ulen = u.length,
-      keys = tree._keys;
+  const keys = tree._keys;
   let nodes = tree._nodes;
   if (!tree._next) {
     keys.push(u);
