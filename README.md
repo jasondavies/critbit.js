@@ -7,6 +7,10 @@ ordered operations such as prefix queries, minimum, maximum, successor and
 predecessor. The API follows `Set` and `Map`, and TypeScript types are
 included.
 
+Any JavaScript string can be a key, including strings containing `"\0"`,
+characters above U+00FF and unpaired surrogates, and keys are kept in the same
+order as JavaScript's default sort.
+
 ```js
 import {Tree, TreeMap} from "critbit";
 
@@ -22,10 +26,17 @@ map.get("banana"); // 2
 [...map]; // [["apple", 1], ["banana", 2]]
 ```
 
-Any strings can be keys, and they are ordered by UTF-16 code units, like
-JavaScript's default string sort. The only exception is a key that is
-identical to an existing key for its first 2<sup>26</sup> (about 67 million)
-characters: adding one throws a `RangeError`.
+## Keys
+
+Keys are ordered by UTF-16 code units, with a key before any longer key it is a
+prefix of, so iteration gives the same order as JavaScript's default sort and
+the `<` operator. Keys can contain any code units, including `"\0"`: `"a"`,
+`"a\0"` and `"a\0\0"` are distinct keys. By contrast, the original crit-bit
+trees in C work on NUL-terminated byte strings, so they can't hold keys that
+contain NUL.
+
+The only exception is a key that is identical to an existing key for its first
+2<sup>26</sup> (about 67 million) characters: adding one throws a `RangeError`.
 
 ## API
 
